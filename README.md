@@ -11,6 +11,14 @@ Plain static files, no build step. Works offline and installs to a phone's home 
    - iPhone: Share > Add to Home Screen.
    - Android (Chrome): menu > Install app.
 
+### Installing into another site repo
+
+```sh
+make install DEST=../my-site/kana-rain
+```
+
+Or put `DEST = ../my-site/kana-rain` in `local.mk` (git-ignored) and just run `make install`. It copies only the app files, and refuses if files changed but `VERSION` in `sw.js` wasn't bumped. Commit and push the site repo yourself afterward.
+
 ## Updating
 
 After changing `index.html` (or any other file), bump `VERSION` in `sw.js` (e.g. `kana-rain-v1` → `kana-rain-v2`). Installed copies pick up the new version the next time they're opened; sometimes it takes two launches.
