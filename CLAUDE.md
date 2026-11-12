@@ -42,7 +42,8 @@ A ~1.2 s "Get ready" hold before anything falls, then "Level N" flashes.
 ## Game mechanics
 
 - Modes: hiragana, katakana, mixed (toggle on start screen). 46 basic characters per script.
-- Accepted spellings: shi/si, chi/ti, tsu/tu, fu/hu, wo/o (を), n/nn (ん). Matching is instant, no Enter. When the typed text exactly matches one character but is also a prefix of another on screen (e.g. `n` with ん and な both falling), it waits up to 800 ms for more input.
+- Optional sets (start-screen toggles, saved as `dakuten` / `youon`): dakuten/handakuten (25 per script) and combos/youon (21 per script). Dakuten combos (ぎゃ, じゃ, びゃ, ぴゃ) appear only when both are on. Sets live in `SETS`; combos are two cells wide and take two lanes. ぢゃ/ぢゅ/ぢょ are left out.
+- Accepted spellings: shi/si, chi/ti, tsu/tu, fu/hu, wo/o (を), n/nn (ん), ji/zi (じ), ji/di (ぢ), zu/du (づ), sha/sya, cha/tya/cya, ja/zya/jya (and the u/o forms). Matching is instant, no Enter. When the typed text exactly matches one character but is also a prefix of another on screen (e.g. `n` with ん and な both falling), it waits up to 800 ms for more input.
 - With several characters matching, the lowest one pops.
 - Lives: 5. Level up every 12 correct answers.
 - Level parameters (`params(l)`): fall time = max(2.4, 8.5 − 0.55·(l−1)) s; max on screen = min(1 + floor((l−1)/2), 6); spawn gap derived from those. Levels 1–15 selectable as a start level.
@@ -59,7 +60,6 @@ Per-character stats are saved: `{ n, hit, miss, err, ms }`.
 Single dark "indigo" look (it deliberately ignores light mode). Tokens are on `:root`: indigo background, lantern-yellow accent, teal for hits, coral for misses. The falling field has a faint grid like genkō yōshi manuscript paper. Fonts: Zen Kaku Gothic New (kana), Sora (UI), JetBrains Mono (romaji), loaded from Google Fonts and cached by the service worker.
 
 ## Ideas not yet built
-- Dakuten/handakuten sets (が, ぱ …) and combos (きゃ, しょ …) as optional sets. The romaji matcher will need more alternate spellings (ji/zi, ja/zya/jya, sha/sya, cha/tya/cya …).
 - Falling short words (ねこ, テレビ) at higher levels: the step from reading characters to reading.
 - A practice mode with no lives: misses show the answer but the game never ends.
 - Lookalike drill (シ/ツ, ソ/ン, ぬ/め, わ/れ/ね, る/ろ, さ/ち).
