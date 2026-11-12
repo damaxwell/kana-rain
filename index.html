@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Kana Rain</title>
+<meta name="description" content="Falling-character drill for hiragana and katakana.">
+<meta name="theme-color" content="#121831">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kana Rain">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;font-size:14px}
+[hidden]{display:none!important}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&family=Sora:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one-screen game. Header strip, a falling field ruled like genkō yōshi manuscript paper, and a romaji input bar that sits right above the phone keyboard. Single committed dark "indigo dye" look. */
+:root {
+  --indigo: #121831;
+  --indigo-2: #1b2346;
+  --indigo-3: #28325e;
+  --rule: rgba(160, 175, 235, 0.07);
+  --kana: #eef0fb;
+  --muted: #8f97bf;
+  --lantern: #f4c95d;
+  --hit: #6fd3c1;
+  --miss: #ff7a6b;
+  --f-kana: "Zen Kaku Gothic New", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic", sans-serif;
+  --f-ui: "Sora", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; overflow: hidden; }
+body { background: var(--indigo); color: var(--kana); font-family: var(--f-ui); -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--lantern); outline-offset: 2px; }
+
+#app { position: fixed; left: 0; right: 0; top: var(--vv-top, 0px); height: var(--vv-h, 100%); display: flex; flex-direction: column; background: var(--indigo); }
+
+/* Header */
+.hud { display: flex; align-items: center; gap: 14px; padding-top: calc(env(safe-area-inset-top, 0px) + 10px); padding-bottom: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); border-bottom: 1px solid var(--indigo-3); font-variant-numeric: tabular-nums; }
+.stat { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.stat b { font-size: 18px; font-weight: 700; line-height: 1.1; }
+.stat span { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.lives { display: flex; gap: 5px; margin-left: auto; }
+.lives i { width: 10px; height: 10px; border-radius: 2px; background: var(--lantern); transition: background .2s, transform .2s; }
+.lives i.gone { background: var(--indigo-3); transform: scale(.8); }
+.iconbtn { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--indigo-3); background: var(--indigo-2); display: grid; place-items: center; flex: none; }
+.iconbtn svg { width: 16px; height: 16px; fill: var(--kana); }
+
+/* Field */
+.field { position: relative; flex: 1; min-height: 0; overflow: hidden;
+  background-image: linear-gradient(var(--rule) 1px, transparent 1px), linear-gradient(90deg, var(--rule) 1px, transparent 1px);
+  background-size: 44px 44px; background-position: center top; }
+.field::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, transparent, rgba(255,122,107,.45), transparent); }
+.levelflash { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; font-weight: 700; font-size: 15px; letter-spacing: .3em; text-transform: uppercase; color: var(--lantern); opacity: 0; }
+.levelflash.show { animation: lf 1.4s ease-out; }
+@keyframes lf { 0% { opacity: 0; transform: scale(.9); } 20% { opacity: 1; transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
+
+.drop { position: absolute; left: 0; top: 0; width: var(--cell); height: var(--cell); display: grid; place-items: center; font-family: var(--f-kana); font-weight: 700; font-size: calc(var(--cell) * .78); line-height: 1; color: var(--kana); will-change: transform; text-shadow: 0 2px 14px rgba(0,0,0,.35); }
+.drop .ro { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); font-family: var(--f-mono); font-size: 15px; font-weight: 700; opacity: 0; white-space: nowrap; }
+.drop.low { color: #fff; }
+.drop.pop { color: var(--hit); text-shadow: 0 0 18px rgba(111,211,193,.55); animation: pop 1.1s ease-in forwards; }
+.drop.pop .ro { color: var(--hit); opacity: 1; top: auto; bottom: calc(100% + 2px); font-size: 16px; }
+@keyframes pop { 0%, 35% { opacity: 1; } 100% { opacity: 0; } }
+.drop.missed { color: var(--miss); animation: missfade 1.6s ease-in forwards; }
+.drop.missed .ro { color: var(--miss); opacity: 1; top: auto; bottom: calc(100% + 2px); font-size: 18px; }
+@keyframes missfade { 0%,10% { translate: -4px 0; } 5%,15% { translate: 4px 0; } 20% { translate: 0 0; opacity: 1; } 75% { opacity: 1; } 100% { opacity: 0; } }
+
+/* Input bar */
+.typebar { display: flex; align-items: center; gap: 10px; padding-block: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); background: var(--indigo-2); border-top: 1px solid var(--indigo-3); }
+#typed { flex: 1; min-width: 0; height: 48px; border-radius: 12px; border: 1px solid var(--indigo-3); background: var(--indigo); color: var(--lantern); font-family: var(--f-mono); font-size: 22px; font-weight: 700; letter-spacing: .08em; padding: 0 14px; caret-color: var(--lantern); }
+.touch #typed { caret-color: transparent; }
+.touch .desk-only { display: none; }
+.kb { display: flex; flex-direction: column; gap: 7px; padding-top: 8px; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); background: var(--indigo-2); user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+.kb-row { display: flex; gap: 5px; }
+.kb-row.r2 { padding: 0 5%; }
+.key { flex: 1 1 0; min-width: 0; height: 50px; border: 0; border-radius: 7px; background: var(--indigo-3); color: var(--kana); font-family: var(--f-mono); font-size: 21px; font-weight: 700; padding: 0; box-shadow: 0 2px 0 rgba(0,0,0,.35); }
+.key.off { background: transparent; color: rgba(143,151,191,.3); box-shadow: none; font-weight: 500; font-size: 16px; }
+.key.wide { flex: 1.5 1 0; font-family: var(--f-ui); font-size: 15px; }
+.key.spacer { visibility: hidden; }
+.key.down { background: var(--lantern); color: #1a1530; transform: translateY(1px); box-shadow: none; }
+#typed::placeholder { color: var(--muted); font-weight: 500; font-size: 15px; letter-spacing: 0; }
+#typed.wrong { animation: wrong .3s; border-color: var(--miss); }
+@keyframes wrong { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+.combo { font-family: var(--f-mono); font-size: 13px; color: var(--muted); min-width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Overlays */
+.screen { position: absolute; inset: 0; z-index: 5; background: var(--indigo); overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 28px); padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.screen.dim { background: rgba(18, 24, 49, .86); display: grid; place-items: center; }
+.wrap { max-width: 440px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+.brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.brand h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
+.brand .jp { font-family: var(--f-kana); font-size: 18px; color: var(--lantern); }
+.lede { margin: -8px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.demo { position: relative; height: 128px; border-radius: 16px; border: 1px solid var(--indigo-3); overflow: hidden;
+  background-image: linear-gradient(var(--rule) 1px, transparent 1px), linear-gradient(90deg, var(--rule) 1px, transparent 1px); background-size: 32px 32px; }
+.demo span { position: absolute; top: -50px; font-family: var(--f-kana); font-weight: 700; font-size: 38px; color: var(--kana); opacity: .9; animation: demo linear infinite; }
+@keyframes demo { to { transform: translateY(190px); } }
+.label { font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--indigo-2); border: 1px solid var(--indigo-3); }
+.seg button { border: 0; background: transparent; border-radius: 10px; padding: 12px 4px; font-size: 15px; font-weight: 600; color: var(--muted); }
+.seg button .k { font-family: var(--f-kana); font-weight: 700; }
+.seg button[aria-pressed="true"] { background: var(--indigo-3); color: var(--kana); box-shadow: inset 0 0 0 1px rgba(244,201,93,.5); }
+.stepper { display: flex; align-items: center; gap: 12px; }
+.stepper button { width: 44px; height: 44px; border-radius: 12px; border: 1px solid var(--indigo-3); background: var(--indigo-2); font-size: 20px; }
+.stepper output { font-size: 22px; font-weight: 700; min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; }
+.stepper small { color: var(--muted); font-size: 13px; }
+.toggle { display: flex; align-items: center; gap: 12px; margin-top: 14px; font-size: 15px; cursor: pointer; }
+.toggle input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.toggle .sw { position: relative; width: 46px; height: 28px; border-radius: 14px; background: var(--indigo-3); flex: none; transition: background .15s; }
+.toggle .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--kana); transition: transform .15s; }
+.toggle input:checked + .sw { background: var(--lantern); }
+.toggle input:checked + .sw::after { transform: translateX(18px); background: #1a1530; }
+.toggle input:focus-visible + .sw { outline: 2px solid var(--lantern); outline-offset: 2px; }
+.primary { height: 56px; border: 0; border-radius: 14px; background: var(--lantern); color: #1a1530; font-size: 17px; font-weight: 700; letter-spacing: .02em; }
+.ghost { height: 48px; border-radius: 14px; border: 1px solid var(--indigo-3); background: transparent; font-size: 15px; font-weight: 600; }
+.row { display: flex; gap: 10px; }
+.row > * { flex: 1; }
+.tip { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 0; }
+.tip b { color: var(--kana); font-weight: 600; }
+
+/* Results */
+.big { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; font-variant-numeric: tabular-nums; }
+.big div { padding: 14px 12px; border-radius: 14px; background: var(--indigo-2); }
+.big b { display: block; font-size: 24px; }
+.big span { font-size: 11px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; border-radius: 12px; background: var(--indigo-2); border: 1px solid var(--indigo-3); }
+.chip .k { font-family: var(--f-kana); font-weight: 700; font-size: 26px; }
+.chip .r { font-family: var(--f-mono); font-size: 14px; color: var(--lantern); }
+.empty { color: var(--muted); font-size: 14px; margin: 0; }
+
+/* Stats grid */
+.grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.cell { aspect-ratio: 1; max-width: 100%; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: var(--indigo-2); border: 1px solid transparent; }
+.cell .k { font-family: var(--f-kana); font-weight: 700; font-size: clamp(20px, 6.5vw, 28px); line-height: 1; }
+.cell .r { font-family: var(--f-mono); font-size: 10px; color: var(--muted); }
+.cell .t { font-family: var(--f-mono); font-size: 9px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.cell.blank { background: transparent; }
+.cell.s0 { border-color: var(--indigo-3); }
+.cell.s1 { background: rgba(255,122,107,.28); }
+.cell.s2 { background: rgba(244,201,93,.22); }
+.cell.s3 { background: rgba(111,211,193,.22); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.danger { color: var(--miss); border-color: rgba(255,122,107,.4); }
+
+.pausebox { text-align: center; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+.pausebox h2 { margin: 0; font-size: 26px; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the fades (they carry the feedback); drop only the shakes */
+  .drop.missed { animation-name: missfade-still; }
+  @keyframes missfade-still { 0%, 75% { opacity: 1; } 100% { opacity: 0; } }
+  #typed.wrong { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div class="hud">
+    <div class="stat"><b id="hScore">0</b><span>Score</span></div>
+    <div class="stat"><b id="hLevel">1</b><span>Level</span></div>
+    <div class="stat"><b id="hAvg">–</b><span>Avg sec</span></div>
+    <div class="lives" id="lives" aria-label="Lives"></div>
+    <button class="iconbtn" id="pauseBtn" aria-label="Pause"><svg viewBox="0 0 16 16"><rect x="3" y="2" width="3.5" height="12" rx="1"/><rect x="9.5" y="2" width="3.5" height="12" rx="1"/></svg></button>
+  </div>
+
+  <div class="field" id="field"><div class="levelflash" id="levelflash"></div></div>
+
+  <div class="typebar">
+    <input id="typed" type="text" inputmode="text" enterkeyhint="done" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="type the romaji" aria-label="Romaji">
+    <div class="combo" id="combo"></div>
+  </div>
+  <div class="kb" id="kb" hidden></div>
+
+  <!-- Start -->
+  <section class="screen" id="startScreen">
+    <div class="wrap">
+      <div class="brand"><h1>Kana Rain</h1><span class="jp">かなの雨</span></div>
+      <p class="lede">Type the romaji before each character reaches the bottom. Characters you miss or answer slowly come back more often.</p>
+      <div class="demo" aria-hidden="true">
+        <span style="left:12%;animation-duration:4.2s">あ</span>
+        <span style="left:38%;animation-duration:5.1s;animation-delay:-2s">ツ</span>
+        <span style="left:63%;animation-duration:3.8s;animation-delay:-1.1s">ね</span>
+        <span style="left:84%;animation-duration:4.7s;animation-delay:-3.2s">ソ</span>
+      </div>
+      <div>
+        <div class="label">Characters</div>
+        <div class="seg" id="modeSeg">
+          <button data-mode="h" aria-pressed="true"><span class="k">ひらがな</span></button>
+          <button data-mode="k" aria-pressed="false"><span class="k">カタカナ</span></button>
+          <button data-mode="m" aria-pressed="false">Mixed</button>
+        </div>
+      </div>
+      <div>
+        <div class="label" id="lvLabel">Starting level</div>
+        <div class="stepper">
+          <button id="lvDown" aria-label="Lower starting level">−</button>
+          <output id="lvOut">1</output>
+          <button id="lvUp" aria-label="Raise starting level">+</button>
+          <small id="lvDesc">1 at a time, slow</small>
+        </div>
+        <label class="toggle" for="lockLv">
+          <input type="checkbox" id="lockLv">
+          <span class="sw" aria-hidden="true"></span>
+          <span>Stay at this level</span>
+        </label>
+      </div>
+      <button class="primary" id="startBtn">Start</button>
+      <button class="ghost" id="statsBtn">Your characters</button>
+      <p class="tip"><span class="desk-only">Use your <b>English keyboard</b>, not the Japanese one. </span>Both spellings work: <b>shi/si</b>, <b>chi/ti</b>, <b>tsu/tu</b>, <b>fu/hu</b>. For ん type <b>n</b> (or <b>nn</b> when an n-sound character is also falling). を takes <b>wo</b> or <b>o</b>.</p>
+    </div>
+  </section>
+
+  <!-- Pause -->
+  <section class="screen dim" id="pauseScreen" hidden>
+    <div class="pausebox">
+      <h2>Paused</h2>
+      <button class="primary" id="resumeBtn" style="width:220px">Resume</button>
+      <button class="ghost" id="quitBtn" style="width:220px">End game</button>
+    </div>
+  </section>
+
+  <!-- Game over -->
+  <section class="screen" id="overScreen" hidden>
+    <div class="wrap">
+      <div class="brand"><h1>Game over</h1><span class="jp" id="overJp">おつかれさま</span></div>
+      <div class="big">
+        <div><b id="oScore">0</b><span>Score</span></div>
+        <div><b id="oLevel">1</b><span>Level</span></div>
+        <div><b id="oAvg">–</b><span>Avg sec</span></div>
+      </div>
+      <div>
+        <div class="label">Missed this round</div>
+        <div class="chips" id="oMissed"></div>
+      </div>
+      <div>
+        <div class="label">Slowest this round</div>
+        <div class="chips" id="oSlow"></div>
+      </div>
+      <button class="primary" id="againBtn">Play again</button>
+      <div class="row">
+        <button class="ghost" id="oStatsBtn">Your characters</button>
+        <button class="ghost" id="homeBtn">Settings</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats -->
+  <section class="screen" id="statsScreen" hidden>
+    <div class="wrap">
+      <div class="brand"><h1>Your characters</h1></div>
+      <div class="seg" id="statSeg" style="grid-template-columns:repeat(2,1fr)">
+        <button data-s="h" aria-pressed="true"><span class="k">ひらがな</span></button>
+        <button data-s="k" aria-pressed="false"><span class="k">カタカナ</span></button>
+      </div>
+      <div class="legend">
+        <span><i style="background:rgba(111,211,193,.5)"></i>Solid</span>
+        <span><i style="background:rgba(244,201,93,.45)"></i>Getting there</span>
+        <span><i style="background:rgba(255,122,107,.55)"></i>Needs work</span>
+        <span><i style="border:1px solid var(--indigo-3)"></i>Not seen</span>
+      </div>
+      <div class="grid" id="statGrid"></div>
+      <p class="tip">The small number is your average answer time in seconds. Weak and slow characters fall more often.</p>
+      <button class="primary" id="statsBack">Back</button>
+      <button class="ghost danger" id="resetBtn">Reset progress</button>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ---------- Data ----------
+  const ROWS = [
+    ["a","i","u","e","o"], ["ka","ki","ku","ke","ko"], ["sa","shi","su","se","so"], ["ta","chi","tsu","te","to"],
+    ["na","ni","nu","ne","no"], ["ha","hi","fu","he","ho"], ["ma","mi","mu","me","mo"], ["ya",null,"yu",null,"yo"],
+    ["ra","ri","ru","re","ro"], ["wa",null,null,null,"wo"], ["n",null,null,null,null]
+  ];
+  const HIRA = ["あいうえお","かきくけこ","さしすせそ","たちつてと","なにぬねの","はひふへほ","まみむめも","や ゆ よ","らりるれろ","わ   を","ん    "];
+  const KATA = ["アイウエオ","カキクケコ","サシスセソ","タチツテト","ナニヌネノ","ハヒフヘホ","マミムメモ","ヤ ユ ヨ","ラリルレロ","ワ   ヲ","ン    "];
+  const ALT = { shi:["si"], chi:["ti"], tsu:["tu"], fu:["hu"], wo:["o"], n:["nn"] };
+  const CHARS = {}; // kana -> {kana, romaji, answers, script, row, col}
+  const POOL = { h: [], k: [] };
+  ROWS.forEach((row, r) => row.forEach((ro, c) => {
+    if (!ro) return;
+    for (const [script, table] of [["h", HIRA], ["k", KATA]]) {
+      const kana = table[r][c];
+      CHARS[kana] = { kana, romaji: ro, answers: [ro, ...(ALT[ro] || [])], script, r, c };
+      POOL[script].push(kana);
+    }
+  }));
+
+  // ---------- Storage ----------
+  const KEY = "kanaRain.v1";
+  let saved = { stats: {}, mode: "h", startLevel: 1, lockLevel: false };
+  try { const raw = localStorage.getItem(KEY); if (raw) saved = Object.assign(saved, JSON.parse(raw)); } catch (e) {}
+  const persist = () => { try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {} };
+  const stat = k => saved.stats[k] || (saved.stats[k] = { n: 0, hit: 0, miss: 0, err: 0.5, ms: null });
+
+  function weight(k) {
+    const s = saved.stats[k];
+    if (!s || s.n === 0) return 2.2;
+    const slow = s.ms == null ? 0.5 : Math.max(0, Math.min(1.5, (s.ms - 1100) / 1400));
+    return 0.5 + 3 * s.err + slow;
+  }
+  function strength(k) { // 0 unseen, 1 weak, 2 mid, 3 solid
+    const s = saved.stats[k];
+    if (!s || s.n === 0) return 0;
+    const w = weight(k);
+    return w > 2 ? 1 : w > 1.1 ? 2 : 3;
+  }
+
+  // ---------- DOM ----------
+  const $ = id => document.getElementById(id);
+  const app = $("app"), field = $("field"), input = $("typed");
+  const screens = { start: $("startScreen"), pause: $("pauseScreen"), over: $("overScreen"), stats: $("statsScreen") };
+  function show(name) { for (const [k, el] of Object.entries(screens)) el.hidden = k !== name; }
+
+  // Fit the app to the visible area above the keyboard
+  function fit() {
+    const vv = window.visualViewport;
+    if (vv) { app.style.setProperty("--vv-h", vv.height + "px"); alignTop(); }
+    sizeField();
+  }
+  // Phones disagree about where a fixed element sits once the keyboard scrolls things.
+  // Measure where the app actually is and nudge it until its top matches the visible top.
+  let appTop = 0;
+  function alignTop() {
+    const vv = window.visualViewport; if (!vv) return false;
+    const delta = vv.offsetTop - app.getBoundingClientRect().top;
+    if (Math.abs(delta) < 1) return false;
+    appTop += delta; app.style.setProperty("--vv-top", appTop + "px");
+    return true;
+  }
+  let W = 0, H = 0, CELL = 56;
+  function sizeField() {
+    W = field.clientWidth; H = field.clientHeight;
+    CELL = Math.round(Math.max(44, Math.min(68, W / 7)));
+    field.style.setProperty("--cell", CELL + "px");
+  }
+  let lastResize = 0;
+  const fitOrig = fit;
+  fit = function () { lastResize = performance.now(); fitOrig(); };
+  if (window.visualViewport) { visualViewport.addEventListener("resize", fit); visualViewport.addEventListener("scroll", fit); }
+  window.addEventListener("resize", fit);
+  fit();
+
+  // ---------- Settings UI ----------
+  const LV_MAX = 15;
+  function params(l) {
+    const fall = Math.max(2.4, 8.5 - 0.55 * (l - 1));       // seconds to cross the field
+    const maxOn = Math.min(1 + Math.floor((l - 1) / 2), 6);  // characters at once
+    const gap = Math.max(0.55, (fall / maxOn) * 0.85);       // seconds between spawns
+    return { fall, maxOn, gap };
+  }
+  function lvText(l) { const p = params(l); return `${p.maxOn} at a time, ${p.fall >= 7 ? "slow" : p.fall >= 5 ? "medium" : p.fall >= 3.5 ? "fast" : "very fast"}`; }
+  $("lockLv").addEventListener("change", e => { saved.lockLevel = e.target.checked; persist(); renderSettings(); });
+  function renderSettings() {
+    $("lockLv").checked = !!saved.lockLevel;
+    $("lvLabel").textContent = saved.lockLevel ? "Level" : "Starting level";
+    for (const b of $("modeSeg").children) b.setAttribute("aria-pressed", b.dataset.mode === saved.mode);
+    $("lvOut").textContent = saved.startLevel; $("lvDesc").textContent = lvText(saved.startLevel);
+  }
+  $("modeSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; saved.mode = b.dataset.mode; persist(); renderSettings(); });
+  $("lvDown").onclick = () => { saved.startLevel = Math.max(1, saved.startLevel - 1); persist(); renderSettings(); };
+  $("lvUp").onclick = () => { saved.startLevel = Math.min(LV_MAX, saved.startLevel + 1); persist(); renderSettings(); };
+  renderSettings();
+
+  // ---------- Game state ----------
+  const LIVES = 5, PER_LEVEL = 12;
+  let G = null, rafId = 0, wakeLock = null, waitTimer = 0;
+
+  function newGame() {
+    G = { level: saved.startLevel, score: 0, lives: LIVES, hits: 0, levelHits: 0, combo: 0, drops: [], last: 0, lastSpawn: -1e9,
+          lastPop: 0, recent: [], times: [], missed: [], slow: {}, running: true, paused: false, id: 0 };
+    field.querySelectorAll(".drop").forEach(n => n.remove());
+    input.value = ""; renderHud();
+  }
+  function pool() {
+    return saved.mode === "h" ? POOL.h : saved.mode === "k" ? POOL.k : POOL.h.concat(POOL.k);
+  }
+  function pick() {
+    const on = new Set(G.drops.map(d => d.kana));
+    const cands = pool().filter(k => !on.has(k) && !G.recent.includes(k));
+    let total = 0; const ws = cands.map(k => (total += weight(k)));
+    const r = Math.random() * total;
+    return cands[ws.findIndex(w => w >= r)] || cands[0];
+  }
+  function spawn(now) {
+    const kana = pick(); if (!kana) return;
+    G.recent.push(kana); if (G.recent.length > 3) G.recent.shift();
+    const lanes = Math.max(4, Math.floor(W / (CELL * 1.15)));
+    const busy = new Set(G.drops.filter(d => d.y < 0.4).map(d => d.lane));
+    const free = [...Array(lanes).keys()].filter(i => !busy.has(i));
+    const lane = (free.length ? free : [...Array(lanes).keys()])[Math.floor(Math.random() * (free.length || lanes))];
+    const x = 8 + lane * ((W - CELL - 16) / Math.max(1, lanes - 1));
+    const el = document.createElement("div");
+    el.className = "drop"; el.innerHTML = `${kana}<span class="ro">${CHARS[kana].romaji}</span>`;
+    field.appendChild(el);
+    const p = params(G.level);
+    const d = { id: ++G.id, kana, ch: CHARS[kana], lane, x, y: 0, born: now, speed: (1 / p.fall) * (0.9 + Math.random() * 0.2), el };
+    G.drops.push(d); place(d);
+    G.lastSpawn = now;
+  }
+  function place(d) { d.el.style.transform = `translate(${d.x}px, ${d.y * (H - CELL) - CELL * 0.2}px)`; }
+
+  function loop(now) {
+    if (!G || !G.running) return;
+    // Some phones report the keyboard late or skip the event: check the visible area every frame
+    const vv = window.visualViewport;
+    if (vv && (Math.abs(vv.height - (G.vvH || 0)) > 1 || Math.abs(vv.offsetTop - (G.vvT || 0)) > 1)) { G.vvH = vv.height; G.vvT = vv.offsetTop; fit(); }
+    else if (alignTop()) lastResize = now;
+    // Hold everything still while the game is starting or the keyboard is opening/closing
+    if (G.paused || now < G.readyUntil || now - lastResize < 450) {
+      if (!G.paused && !G.started && now >= G.readyUntil) { G.started = true; }
+      G.last = now; rafId = requestAnimationFrame(loop); return;
+    }
+    if (!G.announced) { G.announced = true; flash(`Level ${G.level}`); }
+    const dt = G.last ? Math.min(0.05, (now - G.last) / 1000) : 0; G.last = now;
+    const p = params(G.level);
+    if (G.drops.length < p.maxOn && (now - G.lastSpawn) / 1000 > (G.drops.length === 0 ? 0.35 : p.gap)) spawn(now);
+    let lowest = null;
+    for (const d of [...G.drops]) {
+      d.y += d.speed * dt; d.age = (d.age || 0) + dt;
+      if (d.y >= 1) { missDrop(d); continue; }
+      place(d);
+      if (!lowest || d.y > lowest.y) lowest = d;
+    }
+    G.drops.forEach(d => d.el.classList.toggle("low", d === lowest && G.drops.length > 1));
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function popDrop(d) {
+    const now = performance.now();
+    // Reaction time: time since it appeared, or since the previous answer if that was later
+    const ms = Math.min(d.age * 1000, now - (G.lastPop || 0));
+    G.lastPop = now;
+    G.drops = G.drops.filter(x => x !== d);
+    d.el.className = "drop pop";
+    setTimeout(() => d.el.remove(), 1150);
+    const s = stat(d.kana); s.n++; s.hit++; s.err *= 0.7; s.ms = s.ms == null ? ms : s.ms * 0.7 + ms * 0.3;
+    G.times.push(ms); G.slow[d.kana] = Math.max(G.slow[d.kana] || 0, ms);
+    G.hits++; G.levelHits++; G.combo++;
+    G.score += Math.round(10 * G.level * (1 + Math.min(G.combo, 20) / 10) * (1 - d.y * 0.5));
+    if (G.levelHits >= PER_LEVEL && !saved.lockLevel) { G.level++; G.levelHits = 0; flash(`Level ${G.level}`); }
+    persist(); renderHud();
+  }
+  function missDrop(d) {
+    G.drops = G.drops.filter(x => x !== d);
+    d.y = 1; place(d);
+    d.el.className = "drop missed";
+    setTimeout(() => d.el.remove(), 1650);
+    const s = stat(d.kana); s.n++; s.miss++; s.err = s.err * 0.7 + 0.3;
+    if (!G.missed.includes(d.kana)) G.missed.push(d.kana);
+    G.lives--; G.combo = 0;
+    if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) {}
+    persist(); renderHud();
+    if (G.lives <= 0) { G.running = false; setTimeout(gameOver, 1100); }
+  }
+  function flash(text) { const f = $("levelflash"); f.textContent = text; f.classList.remove("show"); void f.offsetWidth; f.classList.add("show"); }
+
+  function renderHud() {
+    $("hScore").textContent = G.score.toLocaleString();
+    $("hLevel").textContent = G.level;
+    $("hAvg").textContent = G.times.length ? (avg(G.times.slice(-15)) / 1000).toFixed(1) : "–";
+    $("lives").innerHTML = Array.from({ length: LIVES }, (_, i) => `<i class="${i < G.lives ? "" : "gone"}"></i>`).join("");
+    $("combo").textContent = G.combo >= 3 ? `×${G.combo}` : "";
+  }
+  const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+
+  // ---------- Typing ----------
+  const live = () => G ? G.drops : [];
+  const exact = (buf) => live().filter(d => d.ch.answers.includes(buf));
+  const extends_ = (buf) => live().some(d => d.ch.answers.some(a => a.length > buf.length && a.startsWith(buf)));
+  const prefix = (buf) => live().some(d => d.ch.answers.some(a => a.startsWith(buf)));
+  const lowestOf = arr => arr.reduce((a, b) => (b.y > a.y ? b : a));
+
+  function wrongTyped() {
+    G.combo = 0; renderHud();
+    input.classList.remove("wrong"); void input.offsetWidth; input.classList.add("wrong");
+    if (live().length === 1) { const s = stat(live()[0].kana); s.err = s.err * 0.85 + 0.15; persist(); }
+  }
+  function processBuf(buf) {
+    clearTimeout(waitTimer);
+    for (let guard = 0; guard < 4 && buf; guard++) {
+      const m = exact(buf);
+      if (m.length && !extends_(buf)) { popDrop(lowestOf(m)); buf = ""; break; }
+      if (m.length) { // e.g. "n" while both ん and な are falling: wait briefly
+        waitTimer = setTimeout(() => { const mm = exact(input.value); if (mm.length) { popDrop(lowestOf(mm)); input.value = ""; } }, 800);
+        break;
+      }
+      if (prefix(buf)) break;
+      const prev = buf.slice(0, -1), pm = prev ? exact(prev) : [];
+      if (pm.length) { popDrop(lowestOf(pm)); buf = buf.slice(-1); continue; }
+      wrongTyped();
+      buf = prefix(buf.slice(-1)) ? buf.slice(-1) : "";
+      break;
+    }
+    input.value = buf;
+  }
+  // ---------- On-screen keyboard (phones and tablets) ----------
+  const TOUCH = window.matchMedia("(pointer: coarse)").matches;
+  const USED = new Set("aeiouksntmhyrwcf");
+  function focusInput() { if (!TOUCH) input.focus({ preventScroll: true }); }
+  if (TOUCH) {
+    document.documentElement.classList.add("touch");
+    input.readOnly = true; input.setAttribute("inputmode", "none"); input.tabIndex = -1;
+    input.placeholder = "tap the romaji";
+    const rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"];
+    const keyHtml = ch => `<button class="key" data-k="${ch}" tabindex="-1">${ch}</button>`;
+    const kb = $("kb");
+    kb.innerHTML =
+      `<div class="kb-row">${[...rows[0]].map(keyHtml).join("")}</div>` +
+      `<div class="kb-row r2">${[...rows[1]].map(keyHtml).join("")}</div>` +
+      `<div class="kb-row"><span class="key wide spacer"></span>${[...rows[2]].map(keyHtml).join("")}<button class="key wide" data-k="bk" tabindex="-1" aria-label="Delete">⌫</button></div>`;
+    kb.hidden = false;
+    kb.addEventListener("pointerdown", e => {
+      const b = e.target.closest("button[data-k]"); if (!b) return;
+      e.preventDefault();
+      b.classList.add("down"); setTimeout(() => b.classList.remove("down"), 90);
+      if (!G || !G.running || G.paused) return;
+      if (b.dataset.k === "bk") { input.value = input.value.slice(0, -1); return; }
+      processBuf(input.value + b.dataset.k);
+    });
+    kb.addEventListener("contextmenu", e => e.preventDefault());
+  }
+
+  input.addEventListener("input", () => {
+    if (!G || !G.running || G.paused) { input.value = ""; return; }
+    processBuf(input.value.toLowerCase().replace(/[^a-z]/g, ""));
+  });
+  input.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); input.value = ""; } });
+
+  // ---------- Flow ----------
+  async function lockScreen() { try { wakeLock = await navigator.wakeLock?.request("screen"); } catch (e) {} }
+  function start() {
+    cancelAnimationFrame(rafId);
+    show(null); newGame(); focusInput();
+    sizeField(); lockScreen();
+    G.readyUntil = performance.now() + 1200; // let the keyboard finish opening first
+    flash("Get ready");
+    G.last = 0; rafId = requestAnimationFrame(loop);
+  }
+  function pause() {
+    if (!G || !G.running || G.paused) return;
+    G.paused = true; show("pause");
+  }
+  function resume() {
+    if (!G || !G.running) return;
+    show(null); focusInput(); G.paused = false; G.last = 0; lockScreen();
+  }
+  function gameOver() {
+    cancelAnimationFrame(rafId);
+    try { wakeLock?.release(); } catch (e) {} wakeLock = null;
+    input.blur();
+    $("oScore").textContent = G.score.toLocaleString();
+    $("oLevel").textContent = G.level;
+    $("oAvg").textContent = G.times.length ? (avg(G.times) / 1000).toFixed(1) : "–";
+    const chip = k => `<div class="chip"><span class="k">${k}</span><span class="r">${CHARS[k].romaji}</span></div>`;
+    $("oMissed").innerHTML = G.missed.length ? G.missed.map(chip).join("") : `<p class="empty">None. Nice.</p>`;
+    const slow = Object.entries(G.slow).filter(([k]) => !G.missed.includes(k)).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k]) => k);
+    $("oSlow").innerHTML = slow.length ? slow.map(chip).join("") : `<p class="empty">Nothing yet.</p>`;
+    show("over");
+  }
+
+  $("startBtn").onclick = start;
+  $("againBtn").onclick = start;
+  $("pauseBtn").onclick = () => G && G.running ? pause() : null;
+  $("resumeBtn").onclick = resume;
+  $("quitBtn").onclick = () => { G.running = false; gameOver(); };
+  $("homeBtn").onclick = () => { renderSettings(); show("start"); };
+  document.addEventListener("visibilitychange", () => { if (document.hidden) pause(); });
+  // If the keyboard gets dismissed mid-game, pause so nothing falls while you can't type
+  if (!TOUCH) {
+    input.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== input) pause(); }, 150));
+    field.addEventListener("pointerdown", () => { if (G && G.running && !G.paused) focusInput(); });
+  }
+
+  // ---------- Stats screen ----------
+  let statScript = "h";
+  function renderStats() {
+    for (const b of $("statSeg").children) b.setAttribute("aria-pressed", b.dataset.s === statScript);
+    const table = statScript === "h" ? HIRA : KATA;
+    let html = "";
+    ROWS.forEach((row, r) => row.forEach((ro, c) => {
+      if (!ro) { html += `<div class="cell blank"></div>`; return; }
+      const k = table[r][c], s = saved.stats[k];
+      const t = s && s.ms != null ? (s.ms / 1000).toFixed(1) + "s" : "";
+      html += `<div class="cell s${strength(k)}"><span class="k">${k}</span><span class="r">${ro}</span><span class="t">${t}</span></div>`;
+    }));
+    $("statGrid").innerHTML = html;
+    resetArmed = false; $("resetBtn").textContent = "Reset progress";
+  }
+  let statsReturn = "start", resetArmed = false;
+  function openStats(from) { statsReturn = from; statScript = saved.mode === "k" ? "k" : "h"; renderStats(); show("stats"); }
+  $("statsBtn").onclick = () => openStats("start");
+  $("oStatsBtn").onclick = () => openStats("over");
+  $("statsBack").onclick = () => show(statsReturn);
+  $("statSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; statScript = b.dataset.s; renderStats(); });
+  $("resetBtn").onclick = () => {
+    if (!resetArmed) { resetArmed = true; $("resetBtn").textContent = "Tap again to erase all progress"; return; }
+    saved.stats = {}; persist(); renderStats();
+  };
+
+  show("start");
+})();
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(() => {}); });
+}
+</script>
+</body>
+</html>
